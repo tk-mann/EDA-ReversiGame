@@ -11,6 +11,16 @@
 #include <iostream>
 #include <cstdint>
 
+#include <iostream>
+#include <bitset>
+#include <cstdint>
+using namespace std;
+
+const uint64_t NOT_A_FILE = 0xFEFEFEFEFEFEFEFEULL; // columna izquierda
+const uint64_t NOT_H_FILE = 0x7F7F7F7F7F7F7F7FULL; // columna derecha+
+
+
+
 void initModel(GameModel& model)
 {
     model.gameOver = true;
@@ -108,14 +118,51 @@ int ctz64_simple(uint64_t x) {
     return count;
 }
 
+void check_if_legal(uint64_t a, uint64_t &b) {
+
+    if (a == 1 || a == 9 || a == -7) {
+        b &= NOT_H_FILE;
+    }
+    if (a == -1 || a == 7 || a == -9) {
+        b &= NOT_A_FILE;
+    }
+
+}
+
+void printBoard(uint64_t board) {
+    std::cout << "\nBitboard visualization:\n";
+    std::cout << "  0 1 2 3 4 5 6 7\n";
+    std::cout << "  ---------------\n";
+
+    for (int row = 0; row < 8; row++) {
+        std::cout << row << "|";
+        for (int col = 0; col < 8; col++) {
+            int index = row * 8 + col;
+            uint64_t bit = 1ULL << index;
+            std::cout << ((board & bit) ? "X " : ". ");
+        }
+        std::cout << "| (índices " << row * 8 << "-" << (row * 8 + 7) << ")\n";
+    }
+    std::cout << "  ---------------\n";
+}
 
 
 void getValidMoves(GameModel& model, Moves& validMoves, uint64_t black_board, uint64_t white_board)
 {
     validMoves.clear();
     // direcciones: desplazamientos en el tablero
-    int directions[8] = { 1, -1, 8, -8, 7, -7, 9, -9 }; /*1: derecha, -1: izquierda, 8: abajo, -8: arriba7: diagonal arriba izquierda, -7 : diagonal abajo derecha9: diagonal arriba derecha, -9: diagonal abajo izquierda */
+    int directions[8] = {
+    1,   // Este ()      - derecha
+    -1,  // Oeste ()     - izquierda
+    8,   // Sur ()       - abajo
+    -8,  // Norte      - arriba
+    7,   // Suroeste  - diagonal abajo-izquierda
+    -7,  // Noreste    - diagonal arriba-derecha
+    9,   // Sureste   - diagonal abajo-derecha
+    -9   // Noroeste   - diagonal arriba-izquierda
+    };
     uint64_t empty = ~(black_board | white_board); // casillas vacías
+    uint64_t prev_mask = 0ULL;
     uint64_t validBits = 0ULL;
     uint64_t myBoard = 0ULL;
     uint64_t opponentBoard = 0ULL;
@@ -129,50 +176,136 @@ void getValidMoves(GameModel& model, Moves& validMoves, uint64_t black_board, ui
         opponentBoard = black_board;
     }
 
-    for (int i = 0; i < 8; i++) {
+    for(int i = 0; i < 8; i++) {
         int direction = directions[i];
-        uint64_t mask = 0ULL;
-        uint64_t possible = 0;
-        if (direction > 0) {
-            mask = myBoard << direction;
-            for (int i = 0; i < 5; i++) {
-                mask &= (myBoard << direction * (i + 1));
-            }
-            possible = (opponentBoard << direction);
-        }
-        else {
-            mask = myBoard >> -direction;
-            for (int i = 0; i < 5; i++) {
-                mask &= (myBoard >> -direction * (i + 1));
-            }
-            possible = (opponentBoard >> -direction);
-        }
-        validBits |= empty & mask & possible;
-
-        while (validBits) {
-            int index = ctz64_simple(validBits); // índice del bit menos significativo que está a 1
-            validBits &= validBits - 1;            // borro ese bit
-
-            int x = index / 8; // fila
-            int y = index % 8; // columna
-            Square move = { x, y };
-            validMoves.push_back(move);
+        uint64_t mask = direction > 0 ? (myBoard << direction) : (myBoard >> (-direction));
+		//check_if_legal(direction, mask);
+        int count = 1;
+        uint64_t candidates = 0ULL;
+        mask &= opponentBoard;
+        //printBoard(mask);
+        while (mask){
+            prev_mask = mask;
+            mask = direction > 0 ? (mask << (direction)) : (mask >> (-(direction)));
+			check_if_legal(direction, mask);
+          //  printBoard(mask);
+            candidates = mask;
+            validBits |= candidates & empty;
+            mask &= opponentBoard;
+            count++;
         }
 
+		//printBoard(candidates);
+        validBits |= candidates & empty;
+	}
+    //ME FALTARÍA SOLO ARREGLAR LOS CASOS LÍMITES
+    while (validBits) {
+       // printBoard(validBits);
+        uint64_t index = ctz64_simple(validBits); // índice del bit menos significativo que está a 1
+        validBits &= validBits - 1ULL;
+        int fila = index / 8; // fila
+        int columna = index % 8; // coumna
+        cout << "Valid move: " << fila << "," << columna<< endl;
+        Square move = { fila, columna, index };
+        validMoves.push_back(move);
     }
 }
-bool playMove(GameModel &model, Square move)
+
+
+bool playMove(GameModel& model, Square move)
 {
+    vector<int> piezas_comidas;
+    vector<int> piezas_potencial;
     // Set game piece
     Piece piece =
         (getCurrentPlayer(model) == PLAYER_WHITE)
-            ? PIECE_WHITE
-            : PIECE_BLACK;
+        ? PIECE_WHITE
+        : PIECE_BLACK;
+    cout << "Move played: " << move.x << "," << move.y << endl;
+    uint64_t pos = move.x * 8 + move.y;
+    cout << pos << endl;
+    uint64_t myBoard = 0ULL;
+    uint64_t opponentBoard = 0ULL;
+    uint64_t piezas_posibles = 0ULL;
 
-	int pos = move.x * 8 + move.y;
-	setBoardPiece(model, getCurrentPlayer(model), pos);
+    setBoardPiece(model, getCurrentPlayer(model), pos);
 
+    int directions[8] = {
+    1,   // Este ()      - derecha
+    -1,  // Oeste ()     - izquierda
+    8,   // Sur ()       - abajo
+    -8,  // Norte      - arriba
+    7,   // Suroeste  - diagonal abajo-izquierda
+    -7,  // Noreste    - diagonal arriba-derecha
+    9,   // Sureste   - diagonal abajo-derecha
+    -9   // Noroeste   - diagonal arriba-izquierda
+    }; if (getCurrentPlayer(model) == PLAYER_BLACK) {
+        myBoard = model.black;
+        opponentBoard = model.white;
+    }
+    else
+    {
+        myBoard = model.white;
+        opponentBoard = model.black;
+    }
+
+    int longitud = 0;
+
+    for (int i = 0; i < 8; i++) {
+        int direction = directions[i];
+        uint64_t mask = 0ULL;
+        uint64_t piezas_potenciales = 0ULL;
+        mask = 1ULL << pos;
+        mask = direction > 0 ? (mask << direction) : (mask >> (-direction));
+        uint64_t mask_enemy = mask & opponentBoard;
+        uint64_t mask_own = mask & myBoard;
+        bool potencial_pieza = false;
+        while (mask_enemy || mask_own) {
+            if (mask_enemy != 0) {
+                piezas_potenciales |= mask_enemy;
+                uint64_t index = ctz64_simple(piezas_potenciales); // índice del bit menos significativo que está a 1
+                int fila = index / 8; // fila
+                int columna = index % 8; // columna
+                potencial_pieza = true;
+            }
+            else if (mask_own != 0 && potencial_pieza) {
+                while (piezas_potenciales) {
+                    uint64_t index = ctz64_simple(piezas_potenciales); // índice del bit menos significativo que está a 1
+                    piezas_potenciales &= piezas_potenciales - 1ULL;
+                    int fila = index / 8; // fila
+                    int columna = index % 8; // coumna
+                    piezas_comidas.push_back(fila * 8 + columna);
+                    longitud++;
+
+                }
+                potencial_pieza = false;
+                break;
+            }
+            mask = direction > 0 ? (mask << direction) : (mask >> (-direction));
+            mask_enemy = mask & opponentBoard;
+            mask_own = mask & myBoard;
+        }
+    }
+
+    for (int i = 0; i < longitud; i++) {
+        setBoardPiece(model, getCurrentPlayer(model), piezas_comidas[i]);
+    }
+
+    if (getCurrentPlayer(model) == PLAYER_BLACK) {
+        myBoard = model.black;
+        opponentBoard = model.white;
+    }
+    else
+    {
+        myBoard = model.white;
+        opponentBoard = model.black;
+    }
+	printBoard(myBoard);
+    printBoard(opponentBoard);
     // To-do: your code goes here...
+    myBoard = model.black;
+    opponentBoard = model.white;
+
 
     // Update timer
     double currentTime = GetTime();

@@ -20,8 +20,8 @@ Square getBestMove(GameModel &model)
     // Returns a random valid move...
     Moves validMoves;
     getValidMoves(model, validMoves, model.black, model.white);
-
     int index = rand() % validMoves.size();
+
     return validMoves[index];
     // --- TEST
 }

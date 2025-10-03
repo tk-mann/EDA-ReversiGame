@@ -183,7 +183,7 @@ void drawView(GameModel &model)
         for (int x = 0; x < BOARD_SIZE; x++)
         {
             Square square = {x, y};
-			int pos = 8 * x + y;
+			int pos = 8 * y + x;
             Vector2 position = {
                 BOARD_X + (float)square.x * SQUARE_SIZE,
                 BOARD_Y + (float)square.y * SQUARE_SIZE};
@@ -248,8 +248,8 @@ void drawView(GameModel &model)
 Square getSquareOnMousePointer()
 {
     Vector2 mousePosition = GetMousePosition();
-    Square square = {(int)floor((mousePosition.x - BOARD_X) / SQUARE_SIZE),
-                     (int)floor((mousePosition.y - BOARD_Y) / SQUARE_SIZE)};
+    Square square = {(int)floor((mousePosition.y - BOARD_X) / SQUARE_SIZE),
+                     (int)floor((mousePosition.x - BOARD_Y) / SQUARE_SIZE)};
 
     if (isSquareValid(square))
         return square;

@@ -30,6 +30,7 @@ struct Square
 {
     int x;
     int y;
+    uint64_t index;
 };
 
 #define GAME_INVALID_SQUARE \
@@ -49,8 +50,8 @@ struct GameModel
     // Piece board[BOARD_SIZE][BOARD_SIZE]; //no la usamos, usamos bitboards ya que son más eficientes y rápdios que una matriz
     // 0 = empty, 1 = black, 2 = white
 
-    uint64_t black = 0; // bitboard para negras
-    uint64_t white = 0; // bitboard para blancas
+    uint64_t black = 0ULL; // bitboard para negras
+    uint64_t white = 0ULL; // bitboard para blancas
 
     /*
     0  1  2  3  4  5  6  7
